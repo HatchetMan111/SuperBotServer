@@ -11,7 +11,7 @@ bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/SuperBotS
 ```
 
 Das Script:
-- nimmt die **nächste freie CT-ID** (oder `--ctid N`) und baut einen unprivilegierten Debian-13-LXC `superbot` (2 vCPU, 4 GB RAM, 10 GB, `onboot=1`)
+- nimmt die **nächste freie CT-ID** (oder `--ctid N`) und baut einen unprivilegierten Debian-13-LXC `superbot` (2 vCPU, 4 GB RAM, 10 GB, `onboot=1`) — Template passend zur Host-Architektur (amd64 **und arm64**)
 - baut `botd` aus dem **gepinnten Upstream** (Rust, `cargo build` im CT, ~3–6 min)
 - legt die **React/Vite-UI** als dist ab (kein Node im CT) und verdrahtet sie per `WEB_DIR`
 - installiert das **Claude-Code-CLI** für den Benutzer `superbot` + ein **ttyd-Web-Terminal**
@@ -44,6 +44,8 @@ Bot-zu-Bot und Routinen aus dem Chat heraus: der Primär-Bot nutzt `botctl ask "
 … superbotserver.sh --status      # CT, Dienste, healthz, Passwort
 … superbotserver.sh --uninstall   # CT inkl. Bot-Daten löschen (Abfrage; --force = ohne)
 … superbotserver.sh --ctid 150    # explizite CT-ID (beim Install/Update/Status)
+… superbotserver.sh --bridge BR   # andere Proxmox-Bridge statt vmbr0
+… superbotserver.sh --ip 192.168.178.111/24 --gw 192.168.178.1   # statisch statt DHCP
 ```
 (alles mit dem selben Einzeiler von oben + Flag)
 

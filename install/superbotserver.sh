@@ -39,6 +39,10 @@ PRIMARY_BOT_NAME="SuperBot"
 TZ_VALUE="Europe/Berlin"
 RUN_TIMEOUT_MINUTES=60
 
+# Netzwerk (überschreibbar, Flags unten): DHCP auf vmbr0 ist Standard
+IP_CIDR="${IP_CIDR:-}"    # z. B. 192.168.178.111/24 (statisch statt DHCP)
+GATEWAY="${GATEWAY:-}"    # z. B. 192.168.178.1 (Pflicht bei --ip)
+
 CT_USER="superbot"                        # botd läuft NICHT als root (Claude-Code-Pflicht)
 APP_DIR="/opt/superbot"
 DATA_DIR="${DATA_DIR:-/home/${CT_USER}/data}"
@@ -66,6 +70,9 @@ on_error() {
   fi
   err "Debug mit vollständigem Trace: wget -qLO /tmp/sb-install.sh ${REPO_RAW} && bash -x /tmp/sb-install.sh [Optionen]"
   err "Log im CT: pct exec <CT-ID> -- cat ${INNER_LOG}"
+  if [[ -n "${CT_ID:-}" && "${MODE:-install}" == "install" ]]; then
+    err "Halbfertigen CT aufräumen: pct destroy ${CT_ID} --force   (oder: ${ONE_LINER} --uninstall)"
+  fi
   exit "$code"
 }
 trap 'on_error $? $LINENO' ERR
@@ -82,6 +89,9 @@ SuperBot-Server Installer (Proxmox-Host, root):
 Optionen:
   (ohne)        Neuinstallation (LXC mit nächster freier ID)
   --ctid N      Explizite CT-ID verwenden
+  --bridge BR   Proxmox-Bridge (Standard: vmbr0)
+  --ip IP/24    Statische IPv4 statt DHCP (z. B. 192.168.178.111/24; --gw nötig)
+  --gw GW       Gateway für --ip (z. B. 192.168.178.1)
   --update      Bestehenden SuperBot-CT aktualisieren (Upstream + Web-UI)
   --status      Status von CT, Diensten und Web-UI anzeigen
   --uninstall   CT inkl. Bot-Daten löschen (Abfrage; --force = ohne)
@@ -98,8 +108,11 @@ while [[ $# -gt 0 ]]; do
     --status)    MODE="status" ;;
     --force)     FORCE=1 ;;
     --ctid)      CT_ID="$2"; shift ;;
+    --bridge)    BRIDGE="$2"; shift ;;
+    --ip)        IP_CIDR="$2"; shift ;;
+    --gw)        GATEWAY="$2"; shift ;;
     --help|-h)   usage; exit 0 ;;
-    *)           die "Unbekannte Option: $1 (verfügbar: --update --uninstall --status --ctid N --force --help)" ;;
+    *)           die "Unbekannte Option: $1 (verfügbar: --update --uninstall --status --ctid N --bridge BR --ip IP/24 --gw GW --force --help)" ;;
   esac
   shift
 done
@@ -134,15 +147,34 @@ next_free_id() {  # niedrigste freie VMID ab 100
 }
 
 # ── Netz/DNS-Warten (Grube 4/11/11a: IP-Poll reicht nicht, DNS 3× bestätigen) ─
-wait_ct_network() {  # Progress NUR nach stderr (Grube 29: kein stdout-Pollution in $())
-  local id=$1 ip="" i
+wait_ct_network() {  # Progress NUR nach stderr (Grube 29); IPv4-gefiltert (hostname -I listet auch v6)
+  local id=$1 ip="" i st start_tries=0
   info "Warte auf Netzwerk des Containers …" >&2
-  for i in $(seq 1 120); do
-    ip="$(pct exec "$id" -- hostname -I 2>/dev/null | awk '{print $1}' || true)"
+  for i in $(seq 1 150); do
+    st="$(pct status "$id" 2>/dev/null | awk '{print $2}' || true)"
+    if [[ "$st" != "running" ]]; then
+      if [[ $start_tries -lt 3 ]]; then
+        start_tries=$((start_tries+1))
+        warn "CT ${id} ist ${st:-unbekannt} – Startversuch ${start_tries}/3 …" >&2
+        pct start "$id" 2>&1 | sed 's/^/    │ /' >&2 || true
+      elif [[ $i -ge 20 ]]; then
+        return 1   # CT startet nicht – Diagnose übernimmt der Aufrufer
+      fi
+    fi
+    # mawk-toleranter IPv4-Filter (Intervall-Regex {3} kann mawk nicht, Grube mawk-{n})
+    ip="$(pct exec "$id" -- hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {print $i; exit}}' || true)"
     if [[ -n "$ip" ]]; then echo "$ip"; return 0; fi
+    if [[ $i -eq 45 ]]; then warn "DHCP antwortet weiterhin nicht – Bridge/Gateway prüfen …" >&2; fi
     sleep 1
   done
   return 1
+}
+
+net_diag() {  # Diagnose-Block bei Netz-Fail
+  err "── Netz-Diagnose ──"
+  pct status "$CT_ID" 2>/dev/null | sed 's/^/    │ /' || true
+  pct config "$CT_ID" 2>/dev/null | grep -E '^(net0|unprivileged|ostype|arch|onboot)' | sed 's/^/    │ /' || true
+  ip -br addr show "${BRIDGE}" 2>/dev/null | sed 's/^/    │ /' || true
 }
 
 verify_ct_dns() {  # 3 konsekutive Erfolge verlangen (Grube 11a)
@@ -214,7 +246,8 @@ ok_in "Benutzer vorhanden"
 
 say "3/7 ttyd Web-Terminal"
 if [[ ! -x /usr/local/bin/ttyd ]]; then
-  curl -fsSL -o /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64"
+  if [[ "$(uname -m)" == "aarch64" ]]; then TTYD_ARCH="aarch64"; else TTYD_ARCH="x86_64"; fi
+  curl -fsSL -o /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${TTYD_ARCH}"
   chmod 755 /usr/local/bin/ttyd
 fi
 ok_in "ttyd $(/usr/local/bin/ttyd --version 2>/dev/null | head -1 || echo '')"
@@ -367,7 +400,14 @@ do_install() {
   local template
   info "Suche Debian-13-Template …"
   pveam update >/dev/null 2>&1 || true
-  template="$(pveam available 2>/dev/null | grep -o 'debian-13-standard[^ ]*' | sort -rV | head -1 || true)"
+  # Arch des Hosts beachten (ARM-Hosts wie ProxSmartHome brauchen arm64, Grube Live-Lauf 1)
+  local host_arch="amd64"
+  if [[ "$(uname -m)" == "aarch64" ]]; then host_arch="arm64"; else host_arch="amd64"; fi
+  template="$(pveam available 2>/dev/null | grep -o "debian-13-standard[^ ]*_${host_arch}\.tar\.zst" | sort -rV | head -1 || true)"
+  if [[ -z "$template" ]]; then
+    warn "Kein ${host_arch}-Template gefunden – nehme beliebiges debian-13 …"
+    template="$(pveam available 2>/dev/null | grep -o 'debian-13-standard[^ ]*' | sort -rV | head -1 || true)"
+  fi
   [[ -n "$template" ]] || die "Kein debian-13-Template gefunden (pveam available leer?)."
   if ! pveam list local 2>/dev/null | grep -q "$template"; then
     info "Lade Template ${template} …"
@@ -386,18 +426,26 @@ do_install() {
   fi
 
   info "Erstelle LXC ${CT_ID} (${CORES} vCPU, ${RAM_MB} MB RAM, ${DISK_GB} GB) …"
+  local netcfg="ip=dhcp"
+  if [[ -n "$IP_CIDR" ]]; then
+    [[ -n "$GATEWAY" ]] || die "Bei --ip ist --gw (Gateway) nötig, z. B. --ip ${IP_CIDR} --gw 192.168.178.1"
+    netcfg="ip=${IP_CIDR},gw=${GATEWAY}"
+  fi
   pct create "$CT_ID" "local:vztmpl/${template}" \
     --hostname "$CT_HOSTNAME" \
     --unprivileged 1 \
     --features nesting=1 \
     --cores "$CORES" --memory "$RAM_MB" --swap "$SWAP_MB" \
     --rootfs "${STORAGE}:${DISK_GB}" \
-    --net0 "name=eth0,bridge=${BRIDGE},ip=dhcp" \
+    --net0 "name=eth0,bridge=${BRIDGE},${netcfg}" \
     --onboot 1 --start 1 >/dev/null
-  ok "Container ${CT_ID} erstellt"
+  ok "Container ${CT_ID} erstellt (${BRIDGE}, ${netcfg})"
 
   local ct_ip
-  ct_ip="$(wait_ct_network "$CT_ID")" || die "CT bekam keine IP (DHCP?). Diagnose: pct exec $CT_ID -- hostname -I"
+  ct_ip="$(wait_ct_network "$CT_ID")" || {
+    net_diag
+    die "CT bekam keine IPv4. Optionen: andere Bridge (--bridge <br>) oder statisch (--ip <IP>/24 --gw <GW>). DHCP-Test im CT: pct exec ${CT_ID} -- dhclient -v eth0"
+  }
   ok "IP: ${ct_ip}"
   verify_ct_dns "$CT_ID" "deb.debian.org" || fix_ct_dns "$CT_ID"
   verify_ct_dns "$CT_ID" "deb.debian.org" || die "DNS im CT defekt. Diagnose: pct exec $CT_ID -- getent hosts deb.debian.org"

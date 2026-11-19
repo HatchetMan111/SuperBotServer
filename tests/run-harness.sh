@@ -180,6 +180,14 @@ run_case "install_--ctid_explicit" 'bash "$INSTALLER" --ctid 150'
 expect_rc "rc=0" 0 "$RC"
 expect_calls "CT 150 erstellt" "create 150"
 
+run_case "install_--ip_statisch" 'bash "$INSTALLER" --ctid 151 --ip 10.0.0.9/24 --gw 10.0.0.1'
+expect_rc "rc=0" 0 "$RC"
+expect_contains "net0 statisch" "$(cat "$SB/state/create-args.txt")" "ip=10.0.0.9/24,gw=10.0.0.1"
+
+run_case "install_--ip_ohne_--gw_stirbt" 'bash "$INSTALLER" --ctid 152 --ip 10.0.0.9/24'
+expect_rc "rc nz" nz "$RC"
+expect_contains "Fehler gw" "$OUT" "--gw (Gateway) nötig"
+
 run_case "install_dup_hostname_stirbt" 'bash "$INSTALLER"' 'seed_ct 102 running superbot'
 expect_rc "rc nz" nz "$RC"
 expect_contains "Fehler mit Hinweis" "$OUT" "bereits ein CT mit Hostname"
