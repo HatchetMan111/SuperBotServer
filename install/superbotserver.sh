@@ -34,6 +34,7 @@ STORAGE="${STORAGE:-local-lvm}"
 
 DEFAULT_HARNESS="claude"
 INSTALL_CODEX="${INSTALL_CODEX:-0}"     # 1 = zusätzlich Codex-CLI installieren
+INSTALL_PI="${INSTALL_PI:-1}"           # 0 = Pi-Agent NICHT installieren (Pi = OpenRouter-Weg)
 USER_NAME_VALUE="${USER_NAME_VALUE:-Phil}"
 PRIMARY_BOT_NAME="SuperBot"
 TZ_VALUE="Europe/Berlin"
@@ -221,7 +222,7 @@ MODE="${INNER_MODE:?}" PORT="${INNER_PORT:?}" TTYD_PORT="${INNER_TTYD_PORT:?}"
 CT_USER="${INNER_CT_USER:?}" APP_DIR="${INNER_APP_DIR:?}"
 UPSTREAM_REPO="${INNER_UPSTREAM_REPO:?}" UPSTREAM_SHA="${INNER_UPSTREAM_SHA:?}"
 WEBUI_REPO="${INNER_WEBUI_REPO:?}"
-DEFAULT_HARNESS="${INNER_DEFAULT_HARNESS:?}" INSTALL_CODEX="${INNER_INSTALL_CODEX:?}"
+DEFAULT_HARNESS="${INNER_DEFAULT_HARNESS:?}" INSTALL_CODEX="${INNER_INSTALL_CODEX:?}" INSTALL_PI="${INNER_INSTALL_PI:?}"
 USER_NAME_VALUE="${INNER_USER_NAME:?}" PRIMARY_BOT_NAME="${INNER_PRIMARY_BOT_NAME:?}"
 TZ_VALUE="${INNER_TZ:?}" RUN_TIMEOUT_MINUTES="${INNER_RUN_TIMEOUT:?}"
 DATA_DIR="${INNER_DATA_DIR:?}" WORKSPACE_DIR="${INNER_WORKSPACE_DIR:?}"
@@ -266,6 +267,10 @@ if ! $SU 'command -v claude >/dev/null 2>&1 || test -x "$HOME/.local/bin/claude"
 fi
 if [[ "$INSTALL_CODEX" == "1" ]] && ! $SU 'command -v codex >/dev/null 2>&1 || test -x "$HOME/.local/bin/codex"'; then
   $SU 'curl -fsSL https://codex.openai.com/install.sh | bash' >/dev/null
+fi
+# Pi-Agent (OpenRouter + viele Anbieter); pi.dev-Installer bringt Node 22 selbst mit
+if [[ "$INSTALL_PI" == "1" ]] && ! $SU 'command -v pi >/dev/null 2>&1 || test -x "$HOME/.local/bin/pi"'; then
+  $SU 'curl -fsSL https://pi.dev/install.sh | sh' >/dev/null
 fi
 ok_in "Toolchain + CLIs"
 
@@ -315,6 +320,8 @@ TZ=${TZ_VALUE}
 RUN_TIMEOUT_MINUTES=${RUN_TIMEOUT_MINUTES}
 SCREENS=off
 PRIMARY_BOT_NAME=${PRIMARY_BOT_NAME}
+# OpenRouter (Pi-Agent als Harness): Zeile einkommentieren + Key eintragen
+# OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ENVEOF
   chmod 600 "${APP_DIR}/.env"
   echo "${PW}" > "${APP_DIR}/.pw"   # für --status
@@ -327,6 +334,9 @@ else
 fi
 mkdir -p "${DATA_DIR}" "${WORKSPACE_DIR}"
 chown -R "${CT_USER}:${CT_USER}" "${DATA_DIR}" "${WORKSPACE_DIR}"
+# .env für den Webterminal-User bearbeitbar (OpenRouter-Key etc.), systemd liest als root
+chown "${CT_USER}:${CT_USER}" "${APP_DIR}/.env"
+chmod 600 "${APP_DIR}/.env"
 
 cat > /etc/systemd/system/superbot.service <<UNIT1
 [Unit]
@@ -386,7 +396,7 @@ run_inner() {  # $1 = MODE; Grube 14: pipefail-tee, damit Inner-Crash sichtbar b
     INNER_CT_USER="$CT_USER" INNER_APP_DIR="$APP_DIR" \
     INNER_UPSTREAM_REPO="$UPSTREAM_REPO" INNER_UPSTREAM_SHA="$UPSTREAM_SHA" \
     INNER_WEBUI_REPO="$WEBUI_REPO" INNER_DEFAULT_HARNESS="$DEFAULT_HARNESS" \
-    INNER_INSTALL_CODEX="$INSTALL_CODEX" INNER_USER_NAME="$USER_NAME_VALUE" \
+    INNER_INSTALL_CODEX="$INSTALL_CODEX" INNER_INSTALL_PI="$INSTALL_PI" INNER_USER_NAME="$USER_NAME_VALUE" \
     INNER_PRIMARY_BOT_NAME="$PRIMARY_BOT_NAME" INNER_TZ="$TZ_VALUE" \
     INNER_RUN_TIMEOUT="$RUN_TIMEOUT_MINUTES" INNER_DATA_DIR="$DATA_DIR" \
     INNER_WORKSPACE_DIR="$WORKSPACE_DIR" \

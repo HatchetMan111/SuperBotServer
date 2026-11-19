@@ -81,6 +81,7 @@ sandbox_up() {
   printf '#!/bin/sh\nmkdir -p "$HOME/.cargo/bin"\nln -sf "$SB/bin/cargo" "$HOME/.cargo/bin/cargo"\necho rustup-ok >> "$SB_STATE/calls.log"\n' > "$SB/fixtures/install-rustup.sh"
   printf '#!/bin/sh\nmkdir -p "$HOME/.local/bin"\nprintf "#!/bin/sh\\necho claude-mock \\"\\$@\\"\\n" > "$HOME/.local/bin/claude"\nchmod 755 "$HOME/.local/bin/claude"\necho claude-ok >> "$SB_STATE/calls.log"\n' > "$SB/fixtures/install-claude.sh"
   printf '#!/bin/sh\nprintf "#!/bin/sh\\necho codex-mock \\"\\$@\\"\\n" > "$HOME/.local/bin/codex"\nchmod 755 "$HOME/.local/bin/codex"\necho codex-ok >> "$SB_STATE/calls.log"\n' > "$SB/fixtures/install-codex.sh"
+  printf '#!/bin/sh\nmkdir -p "$HOME/.local/bin"\nprintf "#!/bin/sh\\necho pi-mock \\"\\$@\\"\\n" > "$HOME/.local/bin/pi"\nchmod 755 "$HOME/.local/bin/pi"\necho pi-ok >> "$SB_STATE/calls.log"\n' > "$SB/fixtures/install-pi.sh"
   printf '#!/bin/sh\necho "ttyd 1.7.7 (mock)"\n' > "$SB/fixtures/ttyd-bin"
   chmod 755 "$SB/fixtures/"*.sh "$SB/fixtures/ttyd-bin"
   # Bind-Mounts: Sandbox übernimmt die kritischen Pfade
@@ -154,6 +155,7 @@ expect_calls "systemd restart superbot" "systemctl restart superbot superbot-tty
 expect_calls "template geladen" "pveam download local debian-13-standard"
 expect_calls "useradd superbot" "useradd -m -s /bin/bash superbot"
 expect_calls "claude-Installer lief" "claude-ok"
+expect_calls "pi-Installer lief (OpenRouter-Weg)" "pi-ok"
 expect_calls "ttyd geladen" "ttyd/releases/download"
 expect_file "sudoers angelegt" "/etc/sudoers.d/superbot"
 expect_file "botd gebaut" "/opt/superbot/bin/botd"
