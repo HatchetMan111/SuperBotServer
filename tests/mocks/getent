@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Mock: getent hosts – DNS-Check; Zähler in Datei (env nur initial), Grube-11a-Harness
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+mkdir -p "$SB_STATE"
+echo "getent $*" >> "$SB_STATE/calls.log"
+cmd="${1:-}"
+if [[ "$cmd" == "hosts" ]]; then
+  local_n="$(cat "$SB_STATE/dns-fail-n" 2>/dev/null || echo "")"
+  if [[ -z "$local_n" ]]; then local_n="${DNS_FAIL_N:-0}"; fi
+  if [[ "$local_n" -gt 0 ]]; then
+    echo "$((local_n-1))" > "$SB_STATE/dns-fail-n"
+    exit 2
+  fi
+  echo "1.2.3.4      ${2:-host}"
+  exit 0
+fi
+exit 0

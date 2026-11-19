@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Mock: cargo – erzeugt fake botd/botctl (Grube 18: chmod +x nicht vergessen!)
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+mkdir -p "$SB_STATE"
+echo "cargo $*" >> "$SB_STATE/calls.log"
+if [[ "${FAIL_CARGO:-0}" == "1" ]]; then
+  echo "error: mock cargo build failure" >&2
+  exit 101
+fi
+if [[ "$*" == *--release* || "$*" == *build* ]]; then
+  mkdir -p target/release
+  printf '#!/bin/sh\necho "botd-mock $*"\n' > target/release/botd
+  printf '#!/bin/sh\necho "botctl-mock $*"\n' > target/release/botctl
+  chmod 755 target/release/botd target/release/botctl
+fi
+exit 0

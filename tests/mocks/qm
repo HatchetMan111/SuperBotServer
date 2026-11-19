@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Mock: qm (VM-Verwaltung) – leere Liste, nur Header
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+echo "qm $*" >> "$SB_STATE/calls.log"
+cmd="${1:-}"
+[[ "$cmd" == "list" ]] && echo "VMID NAME STATUS MEM(MB) BOOTDISK(GB) PID"
+exit 0

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Mock: apt-get – zeichnet auf, installiert nichts
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+mkdir -p "$SB_STATE"
+echo "apt-get $*" >> "$SB_STATE/calls.log"
+if [[ "${FAIL_APT:-0}" == "1" ]]; then
+  echo "E: mock apt failure" >&2
+  exit 100
+fi
+exit 0

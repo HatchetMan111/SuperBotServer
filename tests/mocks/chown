@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Mock: chown – nur aufzeichnen (Dateien im Mock-Root bleiben ohnehin beim Namespace-Root)
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+echo "chown $*" >> "$SB_STATE/calls.log"
+exit 0

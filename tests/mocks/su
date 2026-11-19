@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Mock: su – führt das -c-Kommando als aktueller Benutzer aus (User-Namespace-Root)
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+echo "su $*" >> "$SB_STATE/calls.log"
+# Argumente: [-] [-l] USER [-c] CMD  → CMD nach -c finden
+cmd=""
+prev=""
+for a in "$@"; do
+  [[ "$prev" == "-c" || "$prev" == "--command" ]] && cmd="$a"
+  prev="$a"
+done
+[[ -z "$cmd" ]] && exit 0
+exec bash -c "$cmd"

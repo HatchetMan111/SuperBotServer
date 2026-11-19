@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Mock: pct (Proxmox Container Toolkit) – statevoll über $SB_STATE
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+mkdir -p "$SB_STATE"
+
+log() { echo "pct $*" >> "$SB_STATE/calls.log"; }
+
+cmd="$1"; shift
+case "$cmd" in
+  list)
+    log list
+    cat "$SB_STATE/ct-list.txt" 2>/dev/null
+    ;;
+  status)
+    id="$1"
+    log status "$id"
+    if grep -E "^${id} " "$SB_STATE/ct-list.txt" >/dev/null 2>&1; then
+      state="$(awk -v id="$id" '$1 == id {print $2}' "$SB_STATE/ct-list.txt")"
+      echo "status: ${state:-stopped}"
+    else
+      echo "ct '$id' does not exist" >&2
+      exit 1
+    fi
+    ;;
+  config)
+    id="$1"
+    log config "$id"
+    hostname="$(awk -v id="$id" '$1 == id {print $3}' "$SB_STATE/ct-list.txt")"
+    echo "hostname: ${hostname}"
+    echo "unprivileged: 1"
+    ;;
+  create)
+    id="$1"; shift
+    log create "$id" "$@"
+    # Flags mitwerten (für Assertions): --hostname X --unprivileged 1 --features … --onboot 1 --start 1
+    echo "pct-create-args: $*" >> "$SB_STATE/create-args.txt"
+    hostname=""
+    prev=""
+    for a in "$@"; do
+      [[ "$prev" == "--hostname" ]] && hostname="$a"
+      prev="$a"
+    done
+    echo "${id} running ${hostname}" >> "$SB_STATE/ct-list.txt"
+    ;;
+  start)
+    id="$1"; log start "$id"
+    awk -v id="$id" '{ if ($1 == id) $2 = "running"; print }' "$SB_STATE/ct-list.txt" > "$SB_STATE/ct-list.tmp" && mv "$SB_STATE/ct-list.tmp" "$SB_STATE/ct-list.txt"
+    ;;
+  stop)
+    id="$1"; log stop "$id"
+    awk -v id="$id" '{ if ($1 == id) $2 = "stopped"; print }' "$SB_STATE/ct-list.txt" > "$SB_STATE/ct-list.tmp" && mv "$SB_STATE/ct-list.tmp" "$SB_STATE/ct-list.txt"
+    ;;
+  destroy)
+    id="$1"; log destroy "$id"
+    grep -vE "^${id} " "$SB_STATE/ct-list.txt" > "$SB_STATE/ct-list.tmp" 2>/dev/null; mv "$SB_STATE/ct-list.tmp" "$SB_STATE/ct-list.txt"
+    ;;
+  push)
+    # pct push <id> <src> <dst> → Datei ins Mock-CT-Dateisystem (bind-mounted /root)
+    id="$1"; src="$2"; dst="$3"; log push "$id" "$src" "$dst"
+    mkdir -p "$(dirname "$dst")"
+    cp "$src" "$dst"
+    ;;
+  exec)
+    id="$1"; shift
+    [[ "$1" == "--" ]] && shift
+    log exec "$id" "$*"
+    # Befehl direkt ausführen (erbt INNER_*-Env + Mock-PATH des Harness)
+    exec "$@"
+    ;;
+  set)
+    log set "$@"
+    ;;
+  *)
+    log unknown "$cmd" "$@"
+    echo "mock-pct: unbekannter Befehl $cmd" >&2
+    exit 2
+    ;;
+esac

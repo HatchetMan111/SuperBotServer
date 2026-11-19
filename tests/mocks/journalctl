@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Mock: journalctl – leere Ausgabe
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+echo "journalctl $*" >> "$SB_STATE/calls.log"
+exit 0

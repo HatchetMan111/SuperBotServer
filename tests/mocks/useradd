@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Mock: useradd – Marker statt echter Benutzeranlage
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+mkdir -p "$SB_STATE"
+echo "useradd $*" >> "$SB_STATE/calls.log"
+echo "$*" >> "$SB_STATE/users.txt"
+exit 0

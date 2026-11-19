@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Mock: hostname -I → feste Fake-IP (nur für pct exec DNS/Net-Poll)
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+echo "hostname $*" >> "$SB_STATE/calls.log"
+for a in "$@"; do
+  [[ "$a" == "-I" ]] && { echo "10.0.0.42"; exit 0; }
+done
+# ohne -I: echter hostname
+exec /bin/hostname "$@"

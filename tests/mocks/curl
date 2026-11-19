@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Mock: curl – routed URLs auf Fixtures; -w '%{http_code}' gibt '200' OHNE Newline (Grube 15)
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+FIXDIR="${SB_FIXTURES:?SB_FIXTURES fehlt}"
+mkdir -p "$SB_STATE"
+echo "curl $*" >> "$SB_STATE/calls.log"
+
+want_code=0; out_file=""; url=""
+prev=""
+for a in "$@"; do
+  [[ "$prev" == "-w" ]] && [[ "$a" == *http_code* ]] && want_code=1
+  [[ "$prev" == "-o" ]] && out_file="$a"
+  case "$a" in http*|https*) url="$a" ;; esac
+  prev="$a"
+done
+
+if [[ $want_code -eq 1 ]]; then
+  case "$url" in
+    *healthz*) [[ "${FAIL_HEALTH:-0}" == "1" ]] && printf '500' || printf '200' ;;
+    */api/*)   [[ "${FAIL_API:-0}" == "1" ]] && printf '401' || printf '200' ;;
+    *)         printf '200' ;;
+  esac
+  exit 0
+fi
+
+route_fixture() {
+  case "$url" in
+    *davidondrej/superbot/archive/*)   echo "$FIXDIR/upstream.tar.gz" ;;
+    *codeload.github.com*SuperBotServer*) echo "$FIXDIR/webui.tar.gz" ;;
+    *claude.ai/install.sh*)            echo "$FIXDIR/install-claude.sh" ;;
+    *sh.rustup.rs*)                    echo "$FIXDIR/install-rustup.sh" ;;
+    *codex.openai.com/install.sh*)     echo "$FIXDIR/install-codex.sh" ;;
+    *ttyd/releases/download/*)         echo "$FIXDIR/ttyd-bin" ;;
+    *) echo "" ;;
+  esac
+}
+
+fix="$(route_fixture)"
+if [[ -n "$out_file" ]]; then
+  [[ -n "$fix" ]] && cp "$fix" "$out_file"
+  exit 0
+fi
+# Pipe-Download: Inhalt nach stdout (sh/bash ausführen den Marker)
+if [[ -n "$fix" ]]; then
+  cat "$fix"
+  exit 0
+fi
+echo "mock-curl: kein Fixture für $url" >&2
+exit 22
