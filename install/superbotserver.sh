@@ -268,9 +268,31 @@ fi
 if [[ "$INSTALL_CODEX" == "1" ]] && ! $SU 'command -v codex >/dev/null 2>&1 || test -x "$HOME/.local/bin/codex"'; then
   $SU 'curl -fsSL https://codex.openai.com/install.sh | bash' >/dev/null
 fi
-# Pi-Agent (OpenRouter + viele Anbieter); pi.dev-Installer bringt Node 22 selbst mit
-if [[ "$INSTALL_PI" == "1" ]] && ! $SU 'command -v pi >/dev/null 2>&1 || test -x "$HOME/.local/bin/pi"'; then
-  $SU 'curl -fsSL https://pi.dev/install.sh | sh' >/dev/null
+# Pi-Agent (OpenRouter + viele Anbieter). Braucht Node ≥22.19 (Debian-apt hat nur 20.x) →
+# Node-22-Binary nach /usr/local, dann npm-Install. Der pi.dev-Installer entfällt:
+# er will bei fehlendem Node einen TTY-Dialog (headless = stiller Exit 1).
+if [[ "$INSTALL_PI" == "1" ]]; then
+  need_node=1
+  if command -v node >/dev/null 2>&1; then
+    maj="$(node -v 2>/dev/null | sed 's/^v//' | cut -d. -f1)"
+    if [[ "${maj:-0}" -ge 22 ]]; then need_node=0; fi
+  fi
+  if [[ $need_node -eq 1 ]]; then
+    NODE_ARCH="x64"
+    if [[ "$(uname -m)" == "aarch64" ]]; then NODE_ARCH="arm64"; fi
+    NODE_VER="v22.20.0"
+    NODE_TGZ="/tmp/node-${NODE_VER}-linux-${NODE_ARCH}.tar.gz"   # Originalname – SHASUMS prüft danach
+    say "  (Node ${NODE_VER} nach /usr/local – Pi braucht ≥22.19)"
+    curl -fsSL -o "$NODE_TGZ" "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-linux-${NODE_ARCH}.tar.gz"
+    curl -fsSL -o /tmp/node-shasums.txt "https://nodejs.org/dist/${NODE_VER}/SHASUMS256.txt"
+    if ! grep -E "  node-${NODE_VER}-linux-${NODE_ARCH}\.tar\.gz$" /tmp/node-shasums.txt | (cd /tmp && sha256sum -c -) >/dev/null 2>&1; then
+      echo "✘ Node-SHA256 passt nicht (Download kaputt?) – Abbruch"
+      exit 1
+    fi
+    tar -xzf "$NODE_TGZ" -C /usr/local --strip-components=1 --no-same-owner
+    rm -f "$NODE_TGZ" /tmp/node-shasums.txt
+  fi
+  npm install -g --ignore-scripts @earendil-works/pi-coding-agent >/dev/null
 fi
 ok_in "Toolchain + CLIs"
 

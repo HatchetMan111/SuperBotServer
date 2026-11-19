@@ -24,6 +24,7 @@ sandbox_path() {  # Installations-Pfade in den Sandbox-Kontext auflösen
   p="${p/#\/etc\/systemd\//$SB/etc-systemd/}"
   p="${p/#\/etc\/sudoers.d\//$SB/etc-sudoers/}"
   p="${p/#\/home\/superbot\//$SB/home/superbot/}"
+  p="${p/#\/usr\/local\//$SB/usr-local/}"
   echo "$p"
 }
 expect_contains() {  # $1 name, $2 haystack, $3 needle
@@ -82,6 +83,14 @@ sandbox_up() {
   printf '#!/bin/sh\nmkdir -p "$HOME/.local/bin"\nprintf "#!/bin/sh\\necho claude-mock \\"\\$@\\"\\n" > "$HOME/.local/bin/claude"\nchmod 755 "$HOME/.local/bin/claude"\necho claude-ok >> "$SB_STATE/calls.log"\n' > "$SB/fixtures/install-claude.sh"
   printf '#!/bin/sh\nprintf "#!/bin/sh\\necho codex-mock \\"\\$@\\"\\n" > "$HOME/.local/bin/codex"\nchmod 755 "$HOME/.local/bin/codex"\necho codex-ok >> "$SB_STATE/calls.log"\n' > "$SB/fixtures/install-codex.sh"
   printf '#!/bin/sh\nmkdir -p "$HOME/.local/bin"\nprintf "#!/bin/sh\\necho pi-mock \\"\\$@\\"\\n" > "$HOME/.local/bin/pi"\nchmod 755 "$HOME/.local/bin/pi"\necho pi-ok >> "$SB_STATE/calls.log"\n' > "$SB/fixtures/install-pi.sh"
+  # Node-Fixture + passender SHASUMS-Eintrag (Installer prüft SHA256 via sha256sum -c)
+  nt="$(mktemp -d)"; mkdir -p "$nt/pkg/bin" "$nt/pkg/lib"
+  printf '#!/bin/sh\necho "node-mock $*"\n' > "$nt/pkg/bin/node"; chmod 755 "$nt/pkg/bin/node"
+  printf '#!/bin/sh\necho "npm-mock $*"\n' > "$nt/pkg/bin/npm"; chmod 755 "$nt/pkg/bin/npm"
+  tar -czf "$SB/fixtures/node.tar.gz" --owner=0 --group=0 -C "$nt/pkg" bin lib
+  NODEHASH="$(sha256sum "$SB/fixtures/node.tar.gz" | awk '{print $1}')"
+  printf '%s  node-v22.20.0-linux-x64.tar.gz\n' "$NODEHASH" > "$SB/fixtures/node-shasums.txt"
+  rm -rf "$nt"
   printf '#!/bin/sh\necho "ttyd 1.7.7 (mock)"\n' > "$SB/fixtures/ttyd-bin"
   chmod 755 "$SB/fixtures/"*.sh "$SB/fixtures/ttyd-bin"
   # Bind-Mounts: Sandbox übernimmt die kritischen Pfade
@@ -155,7 +164,9 @@ expect_calls "systemd restart superbot" "systemctl restart superbot superbot-tty
 expect_calls "template geladen" "pveam download local debian-13-standard"
 expect_calls "useradd superbot" "useradd -m -s /bin/bash superbot"
 expect_calls "claude-Installer lief" "claude-ok"
-expect_calls "pi-Installer lief (OpenRouter-Weg)" "pi-ok"
+expect_calls "Node-22 für Pi geladen" "nodejs.org/dist"
+expect_calls "pi via npm installiert" "npm-ok"
+expect_file "pi binary vorhanden" "/usr/local/bin/pi"
 expect_calls "ttyd geladen" "ttyd/releases/download"
 expect_file "sudoers angelegt" "/etc/sudoers.d/superbot"
 expect_file "botd gebaut" "/opt/superbot/bin/botd"

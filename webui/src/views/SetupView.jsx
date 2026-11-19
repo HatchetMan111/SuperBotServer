@@ -43,7 +43,8 @@ export default function SetupView({ me, harnesses, bots, showToast }) {
   );
 
   const openrouterEnvCmd = "echo 'OPENROUTER_API_KEY=sk-or-v1-DEIN-KEY' >> /opt/superbot/.env && sudo systemctl restart superbot";
-  const piInstallCmd = "curl -fsSL https://pi.dev/install.sh | sh";
+  // pi.dev-Installer braucht TTY/Node-Dialog – nachziehen immer per Installer-Update (headless, inkl. Node 22)
+  const piInstallCmd = "bash -c \"$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/SuperBotServer/main/install/superbotserver.sh)\" --update";
 
   return (
     <div className="page">
@@ -84,7 +85,7 @@ export default function SetupView({ me, harnesses, bots, showToast }) {
             </ol>
           ) : (
             <>
-              <p>Pi-Agent installieren (Web-Terminal, Benutzer <code>superbot</code>):</p>
+              <p>Pi-Agent nachziehen (auf dem <strong>Proxmox-Host</strong> ausführen – Installer bringt Pi inkl. Node 22 mit):</p>
               {cmdBtn(piInstallCmd, "pi-install")}
               <ol>
                 <li>Key erstellen: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a> („sk-or-v1-…")</li>

@@ -31,6 +31,8 @@ route_fixture() {
     *claude.ai/install.sh*)            echo "$FIXDIR/install-claude.sh" ;;
     *sh.rustup.rs*)                    echo "$FIXDIR/install-rustup.sh" ;;
     *codex.openai.com/install.sh*)     echo "$FIXDIR/install-codex.sh" ;;
+    *nodejs.org/dist/*SHASUMS256.txt*) echo "$FIXDIR/node-shasums.txt" ;;
+    *nodejs.org/dist/*node-*.tar.gz*)  echo "$FIXDIR/node.tar.gz" ;;
     *pi.dev/install.sh*)               echo "$FIXDIR/install-pi.sh" ;;
     *ttyd/releases/download/*)         echo "$FIXDIR/ttyd-bin" ;;
     *) echo "" ;;

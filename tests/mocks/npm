@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Mock: npm – install -g legt fake pi nach /usr/local/bin (Rest aufgezeichnet)
+set -u
+SB_STATE="${SB_STATE:?SB_STATE fehlt}"
+mkdir -p "$SB_STATE"
+echo "npm $*" >> "$SB_STATE/calls.log"
+case " $* " in
+  *" install -g "*|*"install -g "*)
+    mkdir -p /usr/local/bin
+    printf '#!/bin/sh\necho "pi-mock $*"\n' > /usr/local/bin/pi
+    chmod 755 /usr/local/bin/pi
+    echo "npm-ok" >> "$SB_STATE/calls.log"
+    ;;
+esac
+exit 0
