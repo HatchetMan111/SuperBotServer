@@ -226,6 +226,8 @@ USER_NAME_VALUE="${INNER_USER_NAME:?}" PRIMARY_BOT_NAME="${INNER_PRIMARY_BOT_NAM
 TZ_VALUE="${INNER_TZ:?}" RUN_TIMEOUT_MINUTES="${INNER_RUN_TIMEOUT:?}"
 DATA_DIR="${INNER_DATA_DIR:?}" WORKSPACE_DIR="${INNER_WORKSPACE_DIR:?}"
 export DEBIAN_FRONTEND=noninteractive
+# nackte Template-Locales (perl/locale-Warnungen bei apt)
+export LC_ALL=C LANG=C
 
 say()  { echo "▸ $*"; }
 ok_in() { echo "✔ $*"; }
@@ -233,15 +235,17 @@ ok_in() { echo "✔ $*"; }
 # 1) apt ZUERST (nacktes Template hat kein curl – Grube 21), Downloads danach
 say "1/7 Systempakete (apt)"
 apt-get update -qq
-apt-get install -y -qq curl ca-certificates git build-essential pkg-config ca-certificates wget procps >/dev/null
+apt-get install -y -qq curl ca-certificates git build-essential pkg-config wget procps sudo >/dev/null
 ok_in "Basis-Pakete"
 
 say "2/7 Benutzer ${CT_USER}"
 if ! id "$CT_USER" >/dev/null 2>&1; then
   useradd -m -s /bin/bash "$CT_USER"
-  echo "${CT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart superbot, /usr/bin/systemctl status superbot" > "/etc/sudoers.d/${CT_USER}"
-  chmod 440 "/etc/sudoers.d/${CT_USER}"
 fi
+# Debian-Standard-Template hat kein /etc/sudoers.d (Live-Lauf 2)
+mkdir -p /etc/sudoers.d
+echo "${CT_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart superbot, /usr/bin/systemctl status superbot" > "/etc/sudoers.d/${CT_USER}"
+chmod 440 "/etc/sudoers.d/${CT_USER}"
 ok_in "Benutzer vorhanden"
 
 say "3/7 ttyd Web-Terminal"
