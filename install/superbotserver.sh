@@ -292,6 +292,8 @@ if [[ "$INSTALL_PI" == "1" ]]; then
     tar -xzf "$NODE_TGZ" -C /usr/local --strip-components=1 --no-same-owner
     rm -f "$NODE_TGZ" /tmp/node-shasums.txt
   fi
+  # /usr/local/bin ist NICHT im PATH der Inner-Script-Shell (Live-Lauf 5: npm not found)
+  export PATH="/usr/local/bin:$PATH"
   npm install -g --ignore-scripts @earendil-works/pi-coding-agent >/dev/null
 fi
 ok_in "Toolchain + CLIs"
